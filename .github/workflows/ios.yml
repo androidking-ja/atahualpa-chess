@@ -1,0 +1,127 @@
+name: iOS
+
+# 1) "simulator-check" runs on every push that touches the game or the iOS app:
+#    builds without signing, launches the app in an iPhone simulator and checks that
+#    Stockfish really starts inside iOS WebKit.
+# 2) "app-store" runs only by hand (Actions -> iOS -> Run workflow, with "upload" ticked):
+#    archives, signs with your Apple account (App Store Connect API key) and uploads the
+#    build to App Store Connect / TestFlight.
+
+on:
+  push:
+    paths: ["app/**", "fonts/**", "tools/**", "ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: "Firmar y subir a App Store Connect"
+        type: boolean
+        default: false
+
+jobs:
+  simulator-check:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select the newest stable Xcode
+        run: |
+          XC=$(ls -d /Applications/Xcode_*.app | grep -viE "beta|release_candidate|_rc" | sort -V | tail -1)
+          echo "Using $XC"
+          sudo xcode-select -s "$XC/Contents/Developer"
+          xcodebuild -version
+
+      - name: Bundle the game
+        run: python3 tools/build_www.py ios/AtahualpaChess/www
+
+      - name: Build for the simulator
+        run: |
+          xcodebuild -project ios/AtahualpaChess.xcodeproj -scheme AtahualpaChess \
+            -configuration Debug -sdk iphonesimulator -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath ios/build CODE_SIGNING_ALLOWED=NO build
+
+      - name: Launch in an iPhone simulator and check Stockfish
+        run: |
+          APP=ios/build/Build/Products/Debug-iphonesimulator/AtahualpaChess.app
+          BUNDLE=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$APP/Info.plist")
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)["devices"]
+          ios = sorted([k for k in d if "iOS" in k], reverse=True)
+          print(next(x["udid"] for k in ios for x in d[k] if x["name"].startswith("iPhone")))')
+          xcrun simctl boot "$DEVICE" || true
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" "$APP"
+          xcrun simctl launch --console-pty "$DEVICE" "$BUNDLE" > launch.log 2>&1 &
+          PID=$!
+          for i in $(seq 1 60); do
+            grep -q "ATAHUALPA_ENGINE ready" launch.log && break
+            grep -q "ATAHUALPA_ENGINE fallback" launch.log && break
+            sleep 2
+          done
+          kill $PID 2>/dev/null || true
+          xcrun simctl io "$DEVICE" screenshot simulator.png || true
+          echo "----- app output -----"; cat launch.log
+          grep -q "ATAHUALPA_ENGINE ready" launch.log || { echo "::error::Stockfish did not start in the iOS simulator"; exit 1; }
+          echo "Stockfish 18 runs inside the iOS app."
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: simulator-screenshot
+          path: simulator.png
+          if-no-files-found: ignore
+
+  app-store:
+    if: github.event_name == 'workflow_dispatch' && inputs.upload
+    needs: simulator-check
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select the newest stable Xcode
+        run: |
+          XC=$(ls -d /Applications/Xcode_*.app | grep -viE "beta|release_candidate|_rc" | sort -V | tail -1)
+          sudo xcode-select -s "$XC/Contents/Developer"
+          xcodebuild -version
+
+      - name: Check the secrets
+        run: |
+          for v in ASC_KEY_ID ASC_ISSUER_ID TEAM_ID; do
+            [ -n "${!v}" ] || { echo "::error::Missing secret for $v (see the publishing guide)"; exit 1; }
+          done
+
+      - name: Install the App Store Connect API key
+        env:
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          echo "$ASC_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
+          echo "KEY_PATH=$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8" >> "$GITHUB_ENV"
+
+      - name: Bundle the game
+        run: python3 tools/build_www.py ios/AtahualpaChess/www
+
+      - name: Archive (signed with your team)
+        run: |
+          xcodebuild -project ios/AtahualpaChess.xcodeproj -scheme AtahualpaChess \
+            -configuration Release -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/AtahualpaChess.xcarchive" \
+            DEVELOPMENT_TEAM="$TEAM_ID" CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            archive
+
+      - name: Export and upload to App Store Connect
+        run: |
+          sed "s/TEAM_ID_PLACEHOLDER/$TEAM_ID/" ios/ExportOptions.plist > "$RUNNER_TEMP/ExportOptions.plist"
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/AtahualpaChess.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          echo "Uploaded build ${{ github.run_number }}. It appears in App Store Connect -> TestFlight after processing (10-30 min)."

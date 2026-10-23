@@ -1,0 +1,18 @@
+# Generated game bundles (built by tools/build_www.py)
+ios/AtahualpaChess/www/
+android/src/assets/www/
+# Build output
+ios/build/
+android/build/
+*.apk
+*.ipa
+*.xcarchive
+xcuserdata/
+.DS_Store
+# Signing secrets: never commit
+*.jks
+*.keystore
+keystore.pass
+*.p8
+*.p12
+*.mobileprovision

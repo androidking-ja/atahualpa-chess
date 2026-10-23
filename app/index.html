@@ -1,0 +1,1219 @@
+<title>Atahualpa Chess</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Albert+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one working screen — the tocapu-framed board on the left, a stone "quipu" panel of controls, moves and PGN on the right; stacks on phones. */
+:root{
+  --bg:#e6e2da; --surface:#f4f1ec; --surface-2:#ebe6dd; --line:#cfc6b8;
+  --ink:#22180f; --muted:#6a5d50;
+  --gold:#a8760f; --gold-soft:#e7c46a; --cochineal:#9a2b25; --jade:#2c7a66; --sign:#a37d00;
+  --sq-light:#dcd2bf; --sq-dark:#80302a; --frame-ground:#1a1310;
+  --f-display:"Chakra Petch","Segoe UI",system-ui,sans-serif;
+  --f-body:"Albert Sans","Segoe UI",system-ui,-apple-system,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --radius:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#14100d; --surface:#1f1915; --surface-2:#28211c; --line:#3d332b;
+  --ink:#f0e7da; --muted:#a8998a;
+  --gold:#e3b64e; --gold-soft:#f0cf78; --cochineal:#d0544a; --jade:#4fb59a; --sign:#f2c94c;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#14100d; --surface:#1f1915; --surface-2:#28211c; --line:#3d332b;
+  --ink:#f0e7da; --muted:#a8998a;
+  --gold:#e3b64e; --gold-soft:#f0cf78; --cochineal:#d0544a; --jade:#4fb59a; --sign:#f2c94c;
+  color-scheme:dark}
+
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+*{box-sizing:border-box}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+.app{max-width:1180px;margin:0 auto;padding-block:18px 28px;display:flex;flex-direction:column;gap:18px}
+
+/* Header */
+.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.mark{width:40px;height:40px;flex:none}
+.brand h1{font-family:var(--f-display);font-weight:700;font-size:1.75rem;letter-spacing:.06em;text-transform:uppercase;margin:0;line-height:1}
+.brand h1 span{color:var(--gold)}
+.brand p{margin:3px 0 0;color:var(--muted);font-size:.86rem;letter-spacing:.02em}
+.brand .tagline{margin-top:4px;color:var(--ink);font-family:var(--f-display);font-weight:600;font-size:.92rem;letter-spacing:.06em}
+.brand .sign{margin-top:2px;color:var(--sign);font-family:var(--f-display);font-weight:600;font-size:.8rem;letter-spacing:.08em}
+.lang{margin-left:auto;display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--surface)}
+.lang button{border:0;background:none;padding:6px 9px;font-family:var(--f-mono);font-size:.74rem;cursor:pointer;color:var(--muted)}
+.lang button+button{border-left:1px solid var(--line)}
+.lang button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.lang button:focus-visible{outline:2px solid var(--gold);outline-offset:-3px}
+.sound-btn{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink);cursor:pointer;font-size:.8rem}
+.sound-btn:hover{border-color:var(--gold)}
+.sound-btn svg{width:16px;height:16px}
+.sound-btn[aria-pressed="false"] .on,.sound-btn[aria-pressed="true"] .off{display:none}
+.engine-chip{white-space:nowrap;display:inline-flex;align-items:center;gap:8px;font-family:var(--f-mono);font-size:.74rem;
+  padding:6px 10px;border:1px solid var(--line);border-radius:999px;color:var(--muted);background:var(--surface)}
+.engine-chip i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.engine-chip[data-s="ready"] i{background:var(--jade)}
+.engine-chip[data-s="loading"] i{background:var(--gold);animation:pulse 1s infinite}
+.engine-chip[data-s="fallback"] i{background:var(--cochineal)}
+@keyframes pulse{50%{opacity:.3}}
+
+.main{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:24px;align-items:start}
+@media (max-width:960px){.main{grid-template-columns:minmax(0,1fr)}}
+
+/* Board column */
+.board-col{display:flex;flex-direction:column;align-items:center;gap:10px;min-width:0}
+.board-wrap{width:min(100%,max(300px,calc(100dvh - 190px)),700px);display:flex;flex-direction:column;gap:8px}
+.player-bar{display:flex;align-items:center;gap:10px;height:36px;flex-wrap:nowrap;min-width:0;overflow:hidden}
+.player-bar .who{font-family:var(--f-display);font-weight:600;letter-spacing:.03em;font-size:1rem;white-space:nowrap;flex:none}
+.player-bar .sub{color:var(--muted);font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+.player-bar .caps{margin-left:auto;display:flex;align-items:center;gap:0;height:22px;flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap}
+.player-bar .clock,.player-bar .thinking{flex:none}
+.player-bar .caps svg{width:20px;height:20px;margin-left:-5px}
+.clock{font-family:var(--f-mono);font-weight:500;font-size:1.12rem;line-height:1;padding:6px 10px;border-radius:4px;background:var(--surface-2);border:1px solid var(--line);color:var(--muted);font-variant-numeric:tabular-nums;min-width:4.4em;text-align:center}
+.clock.run{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.clock.low{color:var(--cochineal)}
+.clock.run.low{background:var(--cochineal);border-color:var(--cochineal);color:#fff7ec}
+.clock[hidden]{display:none!important}
+.player-bar .adv{font-family:var(--f-mono);font-size:.78rem;color:var(--muted);margin-left:6px}
+.thinking{display:none;gap:3px;align-items:center}
+.thinking.on{display:inline-flex}
+.thinking b{width:6px;height:6px;background:var(--gold);transform:rotate(45deg);animation:pulse 1s infinite}
+.thinking b:nth-child(2){animation-delay:.2s}.thinking b:nth-child(3){animation-delay:.4s}
+
+.frame{--frame:22px;position:relative;width:100%;aspect-ratio:1;max-width:100%;padding:var(--frame);border-radius:4px;
+  background-color:var(--frame-ground);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 56 28'%3E%3Crect width='56' height='28' fill='%231a1310'/%3E%3Crect x='2' y='2' width='24' height='24' fill='%23a02e27'/%3E%3Cpath d='M12 5h4v3h3v3h3v6h-3v3h-3v3h-4v-3h-3v-3h-3v-6h3v-3h3z' fill='%23e3b64e'/%3E%3Crect x='12.5' y='12.5' width='3' height='3' fill='%231a1310'/%3E%3Crect x='30' y='2' width='24' height='24' fill='%23e8dcc2'/%3E%3Crect x='30' y='2' width='12' height='12' fill='%231a1310'/%3E%3Crect x='42' y='14' width='12' height='12' fill='%231a1310'/%3E%3Crect x='34' y='6' width='4' height='4' fill='%23e3b64e'/%3E%3Crect x='46' y='18' width='4' height='4' fill='%23e3b64e'/%3E%3C/svg%3E");
+  background-size:calc(var(--frame)*2) var(--frame);
+  box-shadow:0 1px 0 rgba(0,0,0,.25),0 18px 40px -18px rgba(0,0,0,.55)}
+@media (max-width:520px){.frame{--frame:12px}}
+.board{position:relative;width:100%;height:100%;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
+  touch-action:none;user-select:none;-webkit-user-select:none;outline:2px solid #e3b64e}
+.sq{-webkit-tap-highlight-color:transparent;position:relative;border:0;padding:0;margin:0;cursor:pointer;background:var(--sq-light);display:block;min-width:0;min-height:0}
+.sq.dk{background:var(--sq-dark);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M18 8h4v4h4v4h4v8h-4v4h-4v4h-4v-4h-4v-4h-4v-8h4v-4h4z' fill='none' stroke='%23000' stroke-opacity='.13' stroke-width='1.5'/%3E%3C/svg%3E");background-size:100% 100%}
+.sq:focus-visible{outline:3px solid var(--gold-soft);outline-offset:-3px;z-index:2}
+.sq .co{position:absolute;font-family:var(--f-mono);font-size:clamp(8px,1.5vw,11px);font-weight:500;pointer-events:none;line-height:1}
+.sq .co.r{top:3px;left:4px}.sq .co.f{bottom:2px;right:4px}
+.sq .co{color:var(--sq-dark)}.sq.dk .co{color:var(--sq-light)}
+.sq::before{content:"";position:absolute;inset:0;pointer-events:none}
+.sq.last::before{background:rgba(231,183,64,.42)}
+.sq.sel::before{background:rgba(44,160,128,.38);box-shadow:inset 0 0 0 3px #2c9f80}
+.sq.check::before{background:radial-gradient(circle,rgba(255,40,30,.9) 0%,rgba(220,30,20,.5) 40%,rgba(200,0,0,0) 72%)}
+.sq.tgt::after{content:"";position:absolute;left:50%;top:50%;width:26%;height:26%;transform:translate(-50%,-50%) rotate(45deg);background:rgba(26,19,16,.42);pointer-events:none;z-index:3}
+.sq.tgt.cap::after{width:84%;height:84%;background:none;border:4px solid rgba(26,19,16,.45);transform:translate(-50%,-50%) rotate(45deg) scale(.72)}
+.pc{position:absolute;inset:4%;width:92%;height:92%;pointer-events:none;z-index:2;filter:drop-shadow(0 2px 1.5px rgba(0,0,0,.45))}
+.pc.ghosted{opacity:.25}
+.pc.arrive{animation:arrive .28s ease-out}
+@keyframes arrive{from{transform:scale(.82);opacity:.4}to{transform:none;opacity:1}}
+.drag-ghost{position:fixed;pointer-events:none;z-index:50;filter:drop-shadow(0 8px 6px rgba(0,0,0,.5));transform:translate(-50%,-50%) scale(1.12)}
+
+/* Overlays on board */
+.overlay{position:absolute;inset:var(--frame);z-index:10;display:flex;align-items:center;justify-content:center;background:rgba(20,14,10,.62);backdrop-filter:blur(2px)}
+.overlay[hidden]{display:none!important}
+.dialog{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;width:min(88%,360px);text-align:center;display:flex;flex-direction:column;gap:12px;box-shadow:0 20px 50px rgba(0,0,0,.4)}
+.dialog h2{margin:0;font-family:var(--f-display);font-size:1.6rem;letter-spacing:.05em;text-transform:uppercase}
+.dialog p{margin:0;color:var(--muted)}
+.promo-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.promo-row button{aspect-ratio:1;border:1px solid var(--line);background:var(--sq-light);border-radius:4px;cursor:pointer;padding:6%}
+.promo-row button:nth-child(even){background:var(--sq-dark)}
+.promo-row button:hover{outline:2px solid var(--gold)}
+.promo-row svg{width:100%;height:100%}
+
+/* Side panel */
+.panel{display:flex;flex-direction:column;gap:18px;min-width:0}
+.block{display:flex;flex-direction:column;gap:9px}
+.label{font-family:var(--f-display);font-weight:600;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}
+.label::after{content:"";flex:1;height:1px;background:var(--line)}
+
+.levels{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.lvl{position:relative}
+.lvl input{position:absolute;opacity:0;pointer-events:none}
+.lvl label{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:10px 10px 9px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);cursor:pointer;height:100%}
+.lvl svg{width:34px;height:16px}
+.lvl .n{font-weight:600;font-size:.9rem}
+.lvl .e{font-family:var(--f-mono);font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.lvl input:checked+label{border-color:var(--gold);background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--gold)}
+.lvl input:checked+label .e{color:var(--gold)}
+.lvl input:focus-visible+label{outline:2px solid var(--gold);outline-offset:2px}
+.step-off{fill:var(--line)}.step-on{fill:var(--gold)}
+
+.seg{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 6px;cursor:pointer;font-size:.88rem;border-left:1px solid var(--line)}
+.seg label:first-of-type{border-left:0}
+.seg input:checked+label{background:var(--ink);color:var(--surface)}
+.seg input:focus-visible+label{outline:2px solid var(--gold);outline-offset:-3px}
+.seg .dot{width:12px;height:12px;border-radius:2px;transform:rotate(45deg);border:1px solid var(--muted)}
+.dot.w{background:#e7c46a}.dot.b{background:#1d1917}.dot.r{background:linear-gradient(90deg,#e7c46a 50%,#1d1917 50%)}
+
+.field{display:flex;align-items:center;gap:10px}
+.field label{font-size:.88rem;color:var(--muted);white-space:nowrap}
+.field input{flex:1;min-width:0;padding:7px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
+.note{font-size:.78rem;color:var(--muted);margin:0}
+
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:8px 13px;border-radius:var(--radius);border:1px solid var(--line);background:var(--surface);cursor:pointer;font-weight:500;font-size:.9rem}
+.btn:hover:not(:disabled){border-color:var(--gold)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--cochineal);border-color:var(--cochineal);color:#fff7ec}
+.btn.primary:hover:not(:disabled){filter:brightness(1.08);border-color:var(--cochineal)}
+.btn svg{width:16px;height:16px;flex:none}
+
+.status{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--line);font-weight:500}
+.status .pip{width:10px;height:10px;transform:rotate(45deg);flex:none;background:var(--muted)}
+.status[data-k="you"] .pip{background:var(--jade)}
+.status[data-k="ai"] .pip{background:var(--gold);animation:pulse 1s infinite}
+.status[data-k="check"] .pip,.status[data-k="end"] .pip{background:var(--cochineal)}
+
+.moves{height:240px;overflow:auto;overflow-anchor:none;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);font-family:var(--f-mono);font-size:.85rem}
+.moves ol{list-style:none;margin:0;padding:4px 0;display:grid;grid-template-columns:3.2em 1fr 1fr}
+.moves li{display:contents}
+.moves .no{color:var(--muted);text-align:right;padding:3px 8px 3px 0;font-variant-numeric:tabular-nums}
+.moves .mv{padding:3px 8px}
+.moves .mv.cur{background:var(--surface-2);color:var(--gold);font-weight:500}
+.moves .empty{padding:14px;color:var(--muted);font-family:var(--f-body);font-size:.86rem}
+
+.pgn{width:100%;min-height:120px;resize:vertical;padding:9px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);font-family:var(--f-mono);font-size:.76rem;line-height:1.5;white-space:pre-wrap}
+.opening{margin:0;display:flex;flex-wrap:nowrap;align-items:baseline;gap:8px;font-size:.88rem;height:1.6em;overflow:hidden}
+.opening .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.opening .eco{flex:none}
+.opening .eco{font-family:var(--f-mono);font-size:.76rem;color:var(--gold);border:1px solid var(--line);border-radius:3px;padding:1px 5px}
+.opening .nm{font-weight:500}
+.ai-note{margin:0;font-size:.8rem;line-height:1.4;color:var(--muted);height:calc(2.8em + 14px);padding:6px 10px;border-radius:var(--radius);border:1px solid transparent;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.ai-note[data-k="yes"]{border-color:var(--jade);color:var(--jade)}
+.ai-note[data-k="no"]{border-color:var(--cochineal);color:var(--ink)}
+.ai-note[data-k="wait"]{border-color:var(--line);border-style:dashed}
+.ai-note b{color:var(--ink);font-weight:500}
+.moves .mv.bk{text-decoration:underline dotted var(--gold);text-underline-offset:3px}
+.offer-note{margin:0;font-size:.86rem;padding:8px 12px;border-radius:var(--radius);border:1px dashed var(--line);color:var(--muted)}
+.offer-note[data-k="yes"]{border-style:solid;border-color:var(--jade);color:var(--jade)}
+.offer-note[data-k="no"]{border-style:solid;border-color:var(--cochineal);color:var(--ink)}
+.toast{min-height:1.2em;font-size:.8rem;color:var(--jade)}
+.toast.err{color:var(--cochineal)}
+
+.foot a.lic{color:var(--gold)}
+.foot{color:var(--muted);font-size:.76rem;border-top:1px solid var(--line);padding-top:12px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="g-gold" x1="0" y1="0" x2=".7" y2="1">
+      <stop offset="0" stop-color="#fff2bf"/><stop offset=".45" stop-color="#e9b94a"/><stop offset="1" stop-color="#94640f"/>
+    </linearGradient>
+    <linearGradient id="g-obs" x1="0" y1="0" x2=".7" y2="1">
+      <stop offset="0" stop-color="#6a625b"/><stop offset=".45" stop-color="#2b2623"/><stop offset="1" stop-color="#0b0908"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<div class="app">
+  <header class="top">
+    <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 0H16V4H20V8H24V16H20V20H16V24H8V20H4V16H0V8H4V4H8Z" fill="var(--cochineal)"/>
+      <path d="M9.5 3H14.5V6H18V9.5H21V14.5H18V18H14.5V21H9.5V18H6V14.5H3V9.5H6V6H9.5Z" fill="none" stroke="var(--gold-soft)" stroke-width="1"/>
+      <circle cx="12" cy="12" r="3" fill="var(--bg)"/>
+    </svg>
+    <div class="brand">
+      <h1>Atahualpa <span>Chess</span></h1>
+      <p class="tagline" data-i18n="tagline">Ajedrez en estilo inca</p>
+      <p data-i18n="subtitle">Ajedrez contra la máquina · ejército del Inti contra ejército de la Killa</p>
+      <p class="sign" data-i18n="sign">Creado por James Alvis Tafur</p>
+    </div>
+    <div class="lang" role="group" data-i18n-aria="lang_aria" aria-label="Idioma">
+      <button type="button" data-lang="es" lang="es" aria-pressed="true" title="Español">ES</button><button type="button" data-lang="en" lang="en" aria-pressed="false" title="English">EN</button><button type="button" data-lang="de" lang="de" aria-pressed="false" title="Deutsch">DE</button>
+    </div>
+    <button class="sound-btn" id="btnSound" type="button" aria-pressed="true" data-i18n-title="sound_title" title="Activar o silenciar sonidos">
+      <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" stroke="none"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+      <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" stroke="none"/><path d="M16 9l6 6M22 9l-6 6"/></svg>
+      <span id="soundTxt">Sonido</span></button>
+    <div class="engine-chip" id="engineChip" data-s="loading"><i></i><span id="engineTxt">Cargando Stockfish 18…</span></div>
+  </header>
+
+  <main class="main">
+    <section class="board-col" data-i18n-aria="board_region" aria-label="Tablero">
+      <div class="board-wrap">
+        <div class="player-bar">
+          <span class="who" id="topName">Atahualpa</span>
+          <span class="sub" id="topSub">Intermedio · 2300</span>
+          <span class="thinking" id="thinking" aria-hidden="true"><b></b><b></b><b></b></span>
+          <span class="caps" id="topCaps"></span>
+          <span class="clock" id="topClock" role="timer" aria-live="off" hidden>5:00</span>
+        </div>
+        <div class="frame" id="frame">
+          <div class="board" id="board" role="grid" data-i18n-aria="board_aria" aria-label="Tablero de ajedrez"></div>
+          <div class="overlay" id="promo" hidden>
+            <div class="dialog" role="dialog" data-i18n-aria="promo_aria" aria-label="Elegir pieza de coronación">
+              <h2 data-i18n="promo_title">Coronación</h2>
+              <p data-i18n="promo_text">Elige la pieza para tu peón.</p>
+              <div class="promo-row" id="promoRow"></div>
+            </div>
+          </div>
+          <div class="overlay" id="endOv" hidden>
+            <div class="dialog" role="dialog" aria-live="polite">
+              <h2 id="endTitle">Victoria</h2>
+              <p id="endReason">Jaque mate</p>
+              <div class="btns" style="justify-content:center">
+                <button class="btn primary" id="endNew" type="button" data-i18n="end_new">Nueva partida</button>
+                <button class="btn" id="endSave" type="button" data-i18n="end_save">Guardar PGN</button>
+                <button class="btn" id="endClose" type="button" data-i18n="end_close">Ver tablero</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="player-bar">
+          <span class="who" id="botName">Jugador</span>
+          <span class="sub" id="botSub">Blancas</span>
+          <span class="caps" id="botCaps"></span>
+          <span class="clock" id="botClock" role="timer" aria-live="off" hidden>5:00</span>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <div class="block">
+        <div class="label" data-i18n="level_label">Nivel de Atahualpa</div>
+        <div class="levels" role="radiogroup" data-i18n-aria="level_aria" aria-label="Nivel">
+          <div class="lvl"><input type="radio" name="lvl" id="lvl-b" value="basico"><label for="lvl-b">
+            <svg viewBox="0 0 34 16"><rect class="step-on" x="0" y="11" width="34" height="5"/><rect class="step-off" x="5" y="5.5" width="24" height="4.5"/><rect class="step-off" x="11" y="0" width="12" height="4.5"/></svg>
+            <span class="n" data-i18n="lvl_basico">Básico</span><span class="e">2000 Elo</span></label></div>
+          <div class="lvl"><input type="radio" name="lvl" id="lvl-i" value="intermedio" checked><label for="lvl-i">
+            <svg viewBox="0 0 34 16"><rect class="step-on" x="0" y="11" width="34" height="5"/><rect class="step-on" x="5" y="5.5" width="24" height="4.5"/><rect class="step-off" x="11" y="0" width="12" height="4.5"/></svg>
+            <span class="n" data-i18n="lvl_intermedio">Intermedio</span><span class="e">2300 Elo</span></label></div>
+          <div class="lvl"><input type="radio" name="lvl" id="lvl-a" value="avanzado"><label for="lvl-a">
+            <svg viewBox="0 0 34 16"><rect class="step-on" x="0" y="11" width="34" height="5"/><rect class="step-on" x="5" y="5.5" width="24" height="4.5"/><rect class="step-on" x="11" y="0" width="12" height="4.5"/></svg>
+            <span class="n" data-i18n="lvl_avanzado">Avanzado</span><span class="e">2500 Elo</span></label></div>
+        </div>
+        <div class="label" style="margin-top:6px" data-i18n="your_pieces">Tus piezas</div>
+        <div class="seg" role="radiogroup" data-i18n-aria="color_aria" aria-label="Color">
+          <input type="radio" name="col" id="col-w" value="w" checked><label for="col-w"><span class="dot w"></span><span data-i18n="white">Blancas</span></label>
+          <input type="radio" name="col" id="col-b" value="b"><label for="col-b"><span class="dot b"></span><span data-i18n="black">Negras</span></label>
+          <input type="radio" name="col" id="col-r" value="r"><label for="col-r"><span class="dot r"></span><span data-i18n="random">Al azar</span></label>
+        </div>
+        <div class="label" style="margin-top:6px" data-i18n="tc_label">Ritmo de juego</div>
+        <div class="seg" role="radiogroup" data-i18n-aria="tc_label" aria-label="Ritmo de juego">
+          <input type="radio" name="tc" id="tc-3" value="3"><label for="tc-3">3 min</label>
+          <input type="radio" name="tc" id="tc-5" value="5"><label for="tc-5">5 min</label>
+          <input type="radio" name="tc" id="tc-0" value="0" checked><label for="tc-0" data-i18n="tc_unlimited">Sin límite</label>
+        </div>
+        <div class="field"><label for="pname" data-i18n="your_name">Tu nombre</label><input id="pname" type="text" maxlength="40" value="" placeholder="Jugador" autocomplete="off"></div>
+        <p class="note" id="settingsNote">Nivel, color y ritmo se aplican al empezar una partida nueva.</p>
+        <div class="btns">
+          <button class="btn primary" id="btnNew" type="button">
+            <svg viewBox="0 0 24 24"><path d="M8 2h8v4h4v4h2v4h-2v4h-4v4H8v-4H4v-4H2v-4h2V6h4z" fill="currentColor"/></svg><span data-i18n="new_game">Nueva partida</span></button>
+          <button class="btn" id="btnUndo" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 0 10h-3"/></svg><span data-i18n="undo">Deshacer</span></button>
+          <button class="btn" id="btnFlip" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16m0 0-4-4m4 4 4-4M17 20V4m0 0-4 4m4-4 4 4"/></svg><span data-i18n="flip">Girar</span></button>
+          <button class="btn" id="btnResign" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 21V4m0 0h11l-2 4 2 4H5"/></svg><span>Rendirse</span></button>
+          <button class="btn" id="btnDraw" type="button" title="Propón a Atahualpa terminar la partida en tablas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M12 4l-2 4h4zM12 20l-2-4h4z"/></svg><span data-i18n="offer_draw">Ofrecer tablas</span></button>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="status" id="status" data-k="you" role="status"><span class="pip"></span><span id="statusTxt">Tu turno</span></div>
+        <p class="opening" id="openingTxt"><span class="eco">—</span><span class="nm">Posición inicial</span></p>
+        <p class="ai-note" id="aiNote" aria-live="polite"></p>
+        <div class="label" data-i18n="moves_label">Jugadas</div>
+        <div class="moves" id="moves"></div>
+        <p class="note" data-i18n="book_note">Subrayado dorado: jugada de libro de Atahualpa.</p>
+      </div>
+
+      <div class="block">
+        <div class="label" data-i18n="pgn_label">Partida en PGN</div>
+        <textarea class="pgn" id="pgn" readonly spellcheck="false" data-i18n-aria="pgn_aria" aria-label="Partida en formato PGN"></textarea>
+        <div class="btns">
+          <button class="btn primary" id="btnSave" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></svg><span data-i18n="save_pgn">Guardar .pgn</span></button>
+          <button class="btn" id="btnCopy" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="13" height="13"/><path d="M4 16V4h12"/></svg><span data-i18n="copy_pgn">Copiar PGN</span></button>
+        </div>
+        <div class="toast" id="toast" aria-live="polite"></div>
+      </div>
+
+      <p class="foot" data-i18n="foot">Motor: Stockfish 18 Lite con fuerza limitada. Cada nivel está ajustado para rendir como Stockfish 18 completo con UCI_Elo 2000, 2300 o 2500, escala calibrada por Stockfish contra la lista de motores CCRL. Es una aproximación al Elo FIDE humano, no una equivalencia oficial. Estilo Kasparov: abre con su repertorio real (1.610 partidas clásicas), luego con jugadas de otros nueve campeones del mundo y la teoría de Lichess; en el medio juego, entre jugadas de igual valor, prefiere la iniciativa y el ataque al rey. Piezas: Sapa Inca con su mascapaicha (rey), ñusta con ñañaca y lliclla (dama), sacerdote con tumi (alfil), llama (caballo), fortaleza de piedra (torre) y guerrero (peón).</p>
+      <p class="foot"><a class="lic" href="licenses.html" data-i18n="licenses">Licencias y créditos</a></p>
+    </aside>
+  </main>
+</div>
+
+<script src="chess.js"></script>
+<script src="atahualpa-ai.js" charset="utf-8"></script>
+<script src="i18n.js" charset="utf-8"></script>
+<script>
+(() => {
+"use strict";
+
+/* ---------- Pieces (Inca motifs) ---------- */
+const BASE = '<path class="m" d="M18 94H82V87H76V81H24V87H18Z"/><path class="k" d="M24 87H76" fill="none" stroke-width="1.4"/>';
+const GEOM = {
+  p: `<path class="m" d="M34 81L40 57H60L66 81Z"/><path class="m" d="M37 57H63V51H37Z"/><circle class="m" cx="50" cy="40" r="11"/>
+      <path class="a" d="M39.6 35H60.4V39H39.6Z"/><path class="f" d="M48 65h4v3h3v4h-3v3h-4v-3h-3v-4h3z"/>`,
+  r: `<path class="m" d="M27 81L31 32H69L73 81Z"/><path class="m" d="M27 32V20H37V25H45V20H55V25H63V20H73V32Z"/>
+      <path class="f" d="M43 81L45.5 62H54.5L57 81Z"/><path class="f" d="M36.5 47L37.5 38H42.5L43.5 47Z"/><path class="f" d="M56.5 47L57.5 38H62.5L63.5 47Z"/>
+      <path class="k" d="M30.4 54H69.6M33 54V66M50 54V62M67 54V66M29.6 66H43M57 66H70.4M42 32V38M58 32V38" fill="none" stroke-width="1.6"/>`,
+  n: `<path class="m" d="M33 81C35 69 40 59 40 47L28 47C21 47 17 44 17 39.5C17 35 21 32 27 31L33.5 29L34 14L39.5 26L43 14L47 28C53 32 56 40 57 50C60 62 66 71 68 81Z"/>
+      <circle class="a" cx="34.5" cy="13" r="3.2"/><circle class="a" cx="43" cy="13" r="3.2"/>
+      <circle class="f" cx="33" cy="36" r="2.2"/><path class="k" d="M18.5 41.5H24" fill="none" stroke-width="1.6"/>
+      <path class="a" d="M39.7 60L58.6 60L59.8 65L38.6 65Z"/><path class="k" d="M38.2 70H62" fill="none" stroke-width="1.6" stroke-dasharray="3 2"/>`,
+  b: `<path class="m" d="M37 27L40 9L50 18L60 9L63 27Q50 21 37 27Z"/><path class="m" d="M45 63V40H55V63Z"/><circle class="m" cx="50" cy="33" r="8.5"/>
+      <path class="m" d="M28 81C28 69 37 63 50 63C63 63 72 69 72 81Z"/>
+      <path class="k" d="M34 78C35 71 42 67.5 50 67.5C58 67.5 65 71 66 78M45 48H55M45 56H55" fill="none" stroke-width="1.6"/>
+      <path class="a" d="M41.5 30.5H58.5V33.5H41.5Z"/>`,
+  // Ñusta: long dark hair, ñañaca (folded head cloth) falling to the shoulders,
+  // lliclla shawl fastened with a tupu pin, and a wide anacu dress with woven bands.
+  q: `<path class="f" d="M40.5 36Q39 50 41.5 60H58.5Q61 50 59.5 36Z"/>
+      <path class="m" d="M26 81Q30 63 38 55Q50 50 62 55Q70 63 74 81Z"/>
+      <circle class="m" cx="50" cy="38.5" r="8.6"/>
+      <path class="a" d="M37 34Q50 22.5 63 34L64.5 50H59.5L58.4 36.2Q50 31.5 41.6 36.2L40.5 50H35.5Z"/>
+      <circle class="m" cx="42.6" cy="24.6" r="3.1"/><circle class="m" cx="50" cy="21.4" r="3.4"/><circle class="m" cx="57.4" cy="24.6" r="3.1"/>
+      <circle class="a" cx="42.6" cy="24.6" r="1.3"/><circle class="a" cx="50" cy="21.4" r="1.4"/><circle class="a" cx="57.4" cy="24.6" r="1.3"/>
+      <path class="k" d="M38.6 39.5L37.6 48M61.4 39.5L62.4 48" fill="none" stroke-width="1.2" stroke-dasharray="1.6 1.4"/>
+      <path class="f" d="M45 40.4h3v1.3h-3zM52 40.4h3v1.3h-3z"/>
+      <path class="a" d="M37.5 56Q50 50.5 62.5 56L56.5 67.5Q50 70.5 43.5 67.5Z"/>
+      <path class="k" d="M40.6 58.5L44 62L47 58.6L50 62L53 58.6L56 62L59.4 58.5" fill="none" stroke-width="1.3"/>
+      <path class="k" d="M50 57.5V61.5" fill="none" stroke-width="1.6"/><circle class="m" cx="50" cy="64" r="3.3"/><circle class="f" cx="50" cy="64" r="1.2"/>
+      <path class="k" d="M31.8 72Q50 69 68.2 72M29.6 77Q50 74 70.4 77" fill="none" stroke-width="1.5"/>`,
+  // Sapa Inca: mascapaicha crown (two corequenque feathers on a gold disc), llautu headband
+  // with the red royal fringe over the forehead, gold ear spools and a tocapu tunic (uncu).
+  k: `<path class="m" d="M47.4 25C44.6 18 41.6 10.5 38.6 3.2C43.4 7.6 47.2 15.5 49.4 25Z"/>
+      <path class="m" d="M52.6 25C55.4 18 58.4 10.5 61.4 3.2C56.6 7.6 52.8 15.5 50.6 25Z"/>
+      <path class="f" d="M38.6 3.2C39.6 5.8 40.6 8.2 41.6 10.4L43.9 9.3C42.5 7 40.8 4.9 38.6 3.2ZM61.4 3.2C60.4 5.8 59.4 8.2 58.4 10.4L56.1 9.3C57.5 7 59.2 4.9 61.4 3.2Z"/>
+      <path class="m" d="M48.9 12.5H51.1V24H48.9Z"/><circle class="m" cx="50" cy="11.5" r="2.9"/><circle class="a" cx="50" cy="11.5" r="1.2"/>
+      <path class="m" d="M27 81L35.5 53Q50 46.5 64.5 53L73 81Z"/>
+      <circle class="m" cx="50" cy="38" r="10"/>
+      <circle class="m" cx="50" cy="25.5" r="3.6"/>
+      <path class="a" d="M39.2 28.6H60.8V32.8H39.2Z"/><path class="k" d="M42 30.7H58" fill="none" stroke-width="1" stroke-dasharray="2 1.5"/>
+      <path class="a" d="M44 32.8H56V36.2H44Z"/>
+      <path class="k" d="M46 33V36M48 33V36M50 33V36M52 33V36M54 33V36" fill="none" stroke-width=".9"/>
+      <path class="f" d="M45 41.2h3.2v1.3H45zM51.8 41.2H55v1.3h-3.2z"/>
+      <circle class="a" cx="39" cy="39.5" r="3.6"/><circle class="m" cx="39" cy="39.5" r="1.5"/>
+      <circle class="a" cx="61" cy="39.5" r="3.6"/><circle class="m" cx="61" cy="39.5" r="1.5"/>
+      ${tocapu(42,56,4,4,2)}<path class="k" d="M31.4 75H68.6" fill="none" stroke-width="1.6"/>`
+};
+function sunRays(cx,cy,r1,r2,n){
+  let d="";for(let i=0;i<n;i++){const a=i/n*Math.PI*2,a1=a-0.17,a2=a+0.17;
+    d+=`M${(cx+r1*Math.cos(a1)).toFixed(2)} ${(cy+r1*Math.sin(a1)).toFixed(2)}L${(cx+r2*Math.cos(a)).toFixed(2)} ${(cy+r2*Math.sin(a)).toFixed(2)}L${(cx+r1*Math.cos(a2)).toFixed(2)} ${(cy+r1*Math.sin(a2)).toFixed(2)}Z`;}
+  return `<path class="m" d="${d}"/>`;
+}
+function tocapu(x,y,cols,rows,s){ // checkerboard tocapu panel on the tunic
+  let o="";for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){o+=`<rect class="${(r+c)%2?'a':'f'}" x="${x+c*s*2}" y="${y+r*s*2}" width="${s*2}" height="${s*2}"/>`;}
+  return o;
+}
+const THEME = {
+  w:{m:"url(#g-gold)",stroke:"#3a210c",f:"#3a210c",a:"#b0302a"},
+  b:{m:"url(#g-obs)",stroke:"#d9aa48",f:"#d9aa48",a:"#c8443a"}
+};
+const PIECE_CACHE={};
+function pieceSVG(color,type,cls="pc"){
+  const t=THEME[color];
+  const key=color+type+cls;
+  if(!PIECE_CACHE[key]){
+    PIECE_CACHE[key]=`<svg class="${cls}" viewBox="0 0 100 100" aria-hidden="true"><style>.m{fill:${t.m};stroke:${t.stroke};stroke-width:2.4;stroke-linejoin:round}.f{fill:${t.f}}.a{fill:${t.a}}.k{stroke:${t.stroke}}</style>`
+      .replace(/\.(m|f|a|k)\{/g,`.${color}$1{`) + (BASE+GEOM[type]).replace(/class="(m|f|a|k)"/g,`class="${color}$1"`) + `</svg>`;
+  }
+  return PIECE_CACHE[key];
+}
+const t=(k,v)=>window.I18N.t(k,v);
+const pieceName=type=>t("p_"+type);
+
+/* ---------- Levels ---------- */
+const LEVELS={
+  // elo: strength the level aims for (Stockfish's UCI_Elo scale, full Stockfish 18 as reference).
+  // uci: value sent to the Lite engine. The Lite network is weaker than the full one at the same
+  // setting, so each value was raised until Lite scored about 50% against full Stockfish 18 at `elo`.
+  // Re-checked with the Kasparov book and style (Oct 2026): Básico needed 2240; the others stayed.
+  basico:{elo:2000,uci:2240,ms:700,depth:2},
+  intermedio:{elo:2300,uci:2450,ms:1100,depth:3},
+  avanzado:{elo:2500,uci:2615,ms:1700,depth:3}
+};
+
+/* ---------- State ---------- */
+const $=id=>document.getElementById(id);
+const boardEl=$("board");
+let game=new window.Chess();
+let S={player:"w",level:"intermedio",orient:"w",result:null,reason:"",startDate:today(),name:"",engineName:"",
+  tc:"0",clock:{w:0,b:0},clockHist:[],clockOn:false,src:[]};
+let selected=null, targets=[], thinking=false, searchToken=0, endShown=false;
+let drag=null, pendingPromo=null, arriveSq=null;
+
+function today(){const d=new Date();return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getDate()).padStart(2,"0")}`;}
+function lv(){return LEVELS[S.level];}
+function lvName(){return t("lvl_"+S.level);}
+function playerName(){return S.name||t("player");}
+
+/* ---------- Engine ---------- */
+const Engine={
+  worker:null,status:"loading",waiters:[],job:null,stale:0,
+  init(){
+    try{
+      this.worker=new Worker("stockfish.js");
+      this.worker.onmessage=e=>this.onLine(String(e.data));
+      this.worker.onerror=e=>this.fail("fail_error",(e&&e.message)||"");
+      this.send("uci");
+      this.timer=setTimeout(()=>{if(this.status==="loading")this.fail("fail_timeout","");},25000);
+    }catch(err){this.fail("fail_blocked",err.message);}
+  },
+  send(c){try{this.worker&&this.worker.postMessage(c);}catch(e){}},
+  onLine(line){
+    if(line==="uciok"){this.send("setoption name UCI_LimitStrength value true");this.send("isready");}
+    else if(line==="readyok"&&this.status==="loading"){clearTimeout(this.timer);this.status="ready";this.loadMs=Math.round(performance.now());this.flush();setChip();
+      if(running()&&running()!==S.player)turnStart=performance.now(); // Atahualpa's clock was paused while the engine loaded
+    }
+    else if(line.startsWith("info")){if(this.job&&this.job.onInfo&&!this.stale)this.job.onInfo(line);}
+    else if(line.startsWith("bestmove")){
+      if(this.stale>0){this.stale--;return;}
+      const j=this.job;this.job=null;if(j){clearTimeout(j.guard);j.res(line.split(/\s+/)[1]);}
+    }
+  },
+  fail(code,detail){
+    if(this.status==="fallback")return;
+    this.reason={code:code||"fail_unknown",d:detail||""};try{console.error("Atahualpa Chess: Stockfish unavailable:",this.reason);}catch(e){}
+    clearTimeout(this.timer);
+    try{this.worker&&this.worker.terminate();}catch(e){}
+    this.worker=null;this.status="fallback";
+    if(this.job){const j=this.job;this.job=null;clearTimeout(j.guard);j.res(null);}
+    this.flush();setChip();
+  },
+  ready(){return this.status==="loading"?new Promise(r=>this.waiters.push(r)):Promise.resolve();},
+  flush(){const w=this.waiters;this.waiters=[];w.forEach(f=>f());},
+  stop(){if(this.job){const j=this.job;this.job=null;clearTimeout(j.guard);this.stale++;this.send("stop");j.res(null);}},
+  // One search at a time. Each job sets every option it depends on. Resolves with the best move, or null if stopped.
+  run(setup,go,onInfo,guardMs){
+    this.stop();
+    return new Promise(res=>{
+      const job={res,onInfo};
+      job.guard=setTimeout(()=>{if(this.job===job)this.send("stop");},guardMs||5000);
+      this.job=job;setup.forEach(c=>this.send(c));this.send(go);
+    });
+  },
+  // Level move: limited strength, calibrated. Stockfish fixes its move at depth 1+int(skill level).
+  async limited(fen,level){
+    await this.ready();if(this.status!=="ready")return null;
+    return this.run(["setoption name UCI_LimitStrength value true","setoption name MultiPV value 1",
+      "setoption name UCI_Elo value "+level.uci,posCmd(fen)],"go depth "+pickDepth(level.uci));
+  },
+  // Full-strength analysis: [{uci, cp}] best first, cp from the side to move (mate = ±10000).
+  async analyse(fen,depth,multipv,only,guardMs){
+    await this.ready();if(this.status!=="ready")return null;
+    const lines={};
+    const mv=await this.run(["setoption name UCI_LimitStrength value false","setoption name MultiPV value "+multipv,posCmd(fen)],
+      "go depth "+depth+(only?" searchmoves "+only:""),
+      l=>{const m=l.match(/^info depth (\d+) .*?multipv (\d+) score (cp|mate) (-?\d+).*? pv (\S+)/);
+        if(m)lines[m[2]]={uci:m[5],cp:m[3]==="mate"?(+m[4]>0?10000-+m[4]:-10000-+m[4]):+m[4]};},guardMs||3000);
+    if(mv==null)return null;
+    return Object.keys(lines).sort((a,b)=>a-b).map(k=>lines[k]);
+  },
+  // Full-strength evaluation for draw decisions.
+  async evaluate(fen){
+    const a=await this.analyse(fen,14,1,null,2500);
+    return a&&a[0]?{kind:"cp",v:a[0].cp}:null;
+  }
+};
+// Stockfish only knows about repetitions if it receives the whole game, so the current position
+// is always sent as "position startpos moves ..." (any other FEN is sent as is).
+function posCmd(fen){
+  if(fen===game.fen()){const mv=game.history({verbose:true}).map(m=>m.from+m.to+(m.promotion||""));return "position startpos"+(mv.length?" moves "+mv.join(" "):"");}
+  return "position fen "+fen;
+}
+function pickDepth(elo){ // same formula Stockfish 18 uses to turn UCI_Elo into a skill level
+  const e=(Math.min(3190,Math.max(1320,elo))-1320)/1870;
+  const lvl=Math.min(19,Math.max(0,((37.2473*e-40.8525)*e+22.2943)*e-0.311438));
+  return 1+Math.floor(lvl);
+}
+// How long Atahualpa appears to think: quick in the opening and in time trouble, a little longer in the middlegame.
+function thinkTime(){
+  const r=(a,b)=>a+Math.random()*(b-a);
+  const legal=game.moves().length, moveNo=Math.floor(game.history().length/2)+1;
+  if(legal===1)return r(150,300);
+  if(!timed())return r(450,1000);
+  const me=S.player==="w"?"b":"w", rem=remaining(me);
+  if(rem<5000)return r(40,120);
+  if(rem<20000)return r(150,450);
+  if(moveNo<=8)return r(250,700);
+  const cap=S.tc==="3"?1600:2400;
+  return Math.min(cap,Math.max(350,rem/40*r(.6,1.3)));
+}
+function setChip(){
+  const c=$("engineChip");c.dataset.s=Engine.status;
+  $("engineTxt").textContent=t(Engine.status==="ready"?"engine_ready":Engine.status==="fallback"?"engine_fallback":"engine_loading");
+  const why=Engine.reason?t(Engine.reason.code,{d:Engine.reason.d||"—"}):t("fail_unknown");
+  c.title=Engine.status==="fallback"?t("engine_t_fallback",{r:why}):t(Engine.status==="ready"?"engine_t_ready":"engine_t_loading");
+  if(typeof render==="function"&&boardEl.children.length)renderStatus();
+  try{const nb=window.AtahualpaNative;if(nb&&nb.status)nb.status(Engine.status);}catch(e){}
+}
+
+/* Fallback: small alpha-beta search, used only if Stockfish cannot load */
+const VAL={p:100,n:320,b:330,r:500,q:900,k:0};
+function evalWhite(g){
+  let s=0;const b=g.board();
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=b[r][c];if(!p)continue;
+    let v=VAL[p.type];const cen=3.5-Math.max(Math.abs(3.5-r),Math.abs(3.5-c));
+    if(p.type==="n"||p.type==="b")v+=cen*8;
+    if(p.type==="p")v+=(p.color==="w"?(6-r):(r-1))*6+cen*3;
+    s+=p.color==="w"?v:-v;}
+  return s;
+}
+let fbDeadline=Infinity;
+function negamax(g,d,a,b){
+  if(performance.now()>fbDeadline)throw "timeout";
+  if(g.in_checkmate())return -100000-d;
+  if(g.in_draw()||g.in_stalemate()||g.in_threefold_repetition())return 0;
+  if(d===0){const e=evalWhite(g);return g.turn()==="w"?e:-e;}
+  const ms=g.moves({verbose:true}).sort((x,y)=>(y.captured?VAL[y.captured]:0)-(x.captured?VAL[x.captured]:0));
+  let best=-Infinity;
+  for(const m of ms){g.move(m);const v=-negamax(g,d-1,-b,-a);g.undo();if(v>best)best=v;if(v>a)a=v;if(a>=b)break;}
+  return best;
+}
+// Backup engine, used only if Stockfish cannot run: deepens 1, 2, 3 plies until the time budget runs out.
+function fallbackBest(fen,budgetMs){
+  const g=new window.Chess(fen);const ms=g.moves({verbose:true}).sort(()=>Math.random()-.5);
+  let best=ms[0]||null;fbDeadline=performance.now()+budgetMs;
+  for(let depth=1;depth<=3;depth++){
+    let db=null,bv=-Infinity;
+    try{for(const m of ms){g.move(m);const v=-negamax(g,depth-1,-Infinity,Infinity);g.undo();if(v>bv){bv=v;db=m;}}}
+    catch(e){break;}
+    if(db)best=db;
+  }
+  fbDeadline=Infinity;
+  return best?best.from+best.to+(best.promotion||""):null;
+}
+
+/* ---------- Sound: stone, tinya drum, quena and pututu, synthesized with Web Audio ---------- */
+const Sound=(()=>{
+  let ctx=null,master=null,noiseBuf=null,on=true,gestured=false;
+  try{on=localStorage.getItem("atahualpa-sound")!=="off";}catch(e){}
+  function ensure(){
+    if(!on||!gestured)return null; // browsers only allow audio after a tap or key press
+    try{
+      if(!ctx){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return null;
+        ctx=new AC();master=ctx.createGain();master.gain.value=.55;master.connect(ctx.destination);
+        noiseBuf=ctx.createBuffer(1,Math.floor(ctx.sampleRate*.6),ctx.sampleRate);const d=noiseBuf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;}
+      if(ctx.state==="suspended")ctx.resume();
+    }catch(e){return null;}
+    return ctx;
+  }
+  function env(g,t,a,peak,dec){g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(peak,t+a);g.gain.exponentialRampToValueAtTime(0.0001,t+a+dec);}
+  function noise(t,freq,q,peak,dec,type="bandpass"){
+    const s=ctx.createBufferSource();s.buffer=noiseBuf;const f=ctx.createBiquadFilter();f.type=type;f.frequency.value=freq;f.Q.value=q;
+    const g=ctx.createGain();env(g,t,.003,peak,dec);s.connect(f).connect(g).connect(master);s.start(t);s.stop(t+dec+.05);
+  }
+  function tone(t,f0,f1,peak,dec,type="sine",a=.004){
+    const o=ctx.createOscillator();o.type=type;o.frequency.setValueAtTime(f0,t);if(f1!==f0)o.frequency.exponentialRampToValueAtTime(f1,t+dec);
+    const g=ctx.createGain();env(g,t,a,peak,dec);o.connect(g).connect(master);o.start(t);o.stop(t+a+dec+.05);
+  }
+  // stone on stone: a piece set down on the board
+  function stone(t,pitch){noise(t,1500*pitch,2.2,.55,.07);tone(t,210*pitch,150*pitch,.45,.09,"triangle");}
+  // tinya: small Andean hand drum, for captures
+  function tinya(t){tone(t,150,62,.9,.32,"sine");noise(t,420,1.2,.35,.06);noise(t,2600,3,.12,.03);}
+  // quena: notched cane flute, breathy, with a little vibrato
+  function quena(t,freq,dur,vol=.32){
+    const o=ctx.createOscillator();o.type="triangle";o.frequency.value=freq;
+    const lfo=ctx.createOscillator();lfo.frequency.value=5.2;const lg=ctx.createGain();lg.gain.value=freq*.012;lfo.connect(lg).connect(o.frequency);
+    const lp=ctx.createBiquadFilter();lp.type="lowpass";lp.frequency.value=freq*3;
+    const g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+.05);g.gain.setValueAtTime(vol,t+dur*.7);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(lp).connect(g).connect(master);o.start(t);lfo.start(t);o.stop(t+dur+.05);lfo.stop(t+dur+.05);
+    noise(t,freq*2.2,1.5,vol*.18,dur*.6);
+  }
+  // pututu: conch-shell trumpet that opens the battle
+  function pututu(t){
+    [[196,.22],[392,.06],[294,.04]].forEach(([f,v])=>{
+      const o=ctx.createOscillator();o.type="sawtooth";o.frequency.setValueAtTime(f*.94,t);o.frequency.linearRampToValueAtTime(f,t+.18);
+      const lp=ctx.createBiquadFilter();lp.type="lowpass";lp.frequency.setValueAtTime(300,t);lp.frequency.linearRampToValueAtTime(900,t+.35);lp.frequency.linearRampToValueAtTime(400,t+.9);
+      const g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(v,t+.18);g.gain.setValueAtTime(v,t+.6);g.gain.exponentialRampToValueAtTime(0.0001,t+1);
+      o.connect(lp).connect(g).connect(master);o.start(t);o.stop(t+1.05);});
+  }
+  // A minor pentatonic, the scale of many Andean melodies
+  const N={A4:440,C5:523.25,D5:587.33,E5:659.25,G5:783.99,A5:880,E4:329.63,G4:392};
+  function phrase(t,notes,step){notes.forEach((n,i)=>quena(t+i*step,N[n],step*1.3));}
+  function play(kind){
+    if(!ensure())return;const t=ctx.currentTime+.02;
+    switch(kind){
+      case "move":stone(t,1);break;
+      case "move-ai":stone(t,.82);break;
+      case "capture":tinya(t);stone(t+.01,.9);break;
+      case "castle":stone(t,1);stone(t+.11,.9);break;
+      case "promo":stone(t,1);phrase(t+.08,["A4","C5","E5"],.09);break;
+      case "check":quena(t+.04,N.E5,.16,.3);quena(t+.18,N.A5,.28,.3);break;
+      case "start":pututu(t);break;
+      case "low":quena(t,N.E4,.22,.3);quena(t+.26,N.E4,.22,.3);break;
+      case "win":phrase(t+.15,["A4","C5","D5","E5","G5","A5"],.15);tinya(t+.15);tinya(t+.6);break;
+      case "lose":phrase(t+.15,["E5","D5","C5","A4","G4","E4"],.2);tinya(t+.15);break;
+      case "draw":phrase(t+.15,["A4","E5","D5","A4"],.18);break;
+    }
+  }
+  function forMove(r,byPlayer){
+    const f=r.flags||"";
+    if(r.promotion)play("promo");
+    else if(f.includes("k")||f.includes("q"))play("castle");
+    else if(r.captured)play("capture");
+    else play(byPlayer?"move":"move-ai");
+    if(game.in_check()&&!game.in_checkmate())setTimeout(()=>play("check"),70);
+  }
+  function setOn(v,quiet){on=v;try{localStorage.setItem("atahualpa-sound",v?"on":"off");}catch(e){}
+    $("btnSound").setAttribute("aria-pressed",String(v));$("soundTxt").textContent=t(v?"sound_on":"sound_off");
+    if(v&&!quiet)play("move");}
+  const unlock=()=>{gestured=true;ensure();window.removeEventListener("pointerdown",unlock,true);window.removeEventListener("keydown",unlock,true);};
+  window.addEventListener("pointerdown",unlock,true);window.addEventListener("keydown",unlock,true);
+  return {play,forMove,setOn,get on(){return on;}};
+})();
+$("btnSound").addEventListener("click",()=>Sound.setOn(!Sound.on));
+Sound.setOn(Sound.on,true);
+
+/* ---------- Clocks (3 min, 5 min or unlimited, no increment) ---------- */
+// White's first move is untimed; Black's clock starts once White has moved, as on most chess servers.
+let turnStart=performance.now(), lowWarned=false;
+function timed(){return S.tc!=="0";}
+function running(){
+  if(!timed()||!S.clockOn||outcome())return null;
+  const t=game.turn();
+  if(t!==S.player&&Engine.status==="loading")return null; // engine still downloading: Atahualpa's clock waits
+  return t;
+}
+function remaining(c){return Math.max(0,S.clock[c]-(running()===c?performance.now()-turnStart:0));}
+function clockNow(){return {w:remaining("w"),b:remaining("b")};}
+function resetClocks(){const ms=(+S.tc)*60000;S.clock={w:ms,b:ms};S.clockHist=[];S.clockOn=false;turnStart=performance.now();lowWarned=false;}
+function beforeMove(){S.clockHist.push(clockNow());}            // snapshot for undo, call before game.move
+function afterMove(color){                                         // charge the mover, start the other clock
+  if(!timed())return;
+  if(S.clockOn)S.clock[color]=Math.max(0,S.clock[color]-(performance.now()-turnStart));
+  if(!S.clockOn&&game.history().length>=1)S.clockOn=true;
+  turnStart=performance.now();
+}
+function undoClocks(){
+  const k=game.history().length;const snap=S.clockHist[k];
+  if(snap){S.clock={w:snap.w,b:snap.b};}
+  S.clockHist=S.clockHist.slice(0,k);S.clockOn=k>=1;turnStart=performance.now();lowWarned=false;
+}
+function canMate(c){ // enough material to checkmate? (FIDE: flag + no mating material = draw)
+  let n=0,minor=0,heavy=false;
+  game.board().forEach(row=>row.forEach(p=>{if(p&&p.color===c&&p.type!=="k"){n++;if(p.type==="p"||p.type==="r"||p.type==="q")heavy=true;else minor++;}}));
+  return heavy||minor>=2;
+}
+function flag(c){
+  const opp=c==="w"?"b":"w";
+  S.clock[c]=0;
+  if(canMate(opp)){S.result=opp==="w"?"1-0":"0-1";S.reason="flag";}
+  else{S.result="1/2-1/2";S.reason="flag_nomat";}
+  searchToken++;Engine.stop();thinking=false;pendingPromo=null;$("promo").hidden=true;selected=null;targets=[];
+  render();
+}
+function fmtClock(ms){
+  if(ms<10000){const t=Math.max(0,Math.ceil(ms/100)/10);return "0:"+t.toFixed(1).padStart(4,"0");}
+  const sec=Math.ceil(ms/1000);return Math.floor(sec/60)+":"+String(sec%60).padStart(2,"0");
+}
+const clockEls={w:null,b:null};
+function paintClocks(){
+  const run=running();
+  ["w","b"].forEach(c=>{const el=clockEls[c];if(!el)return;
+    el.hidden=!timed();if(!timed())return;
+    const ms=remaining(c);el.textContent=fmtClock(ms);
+    el.classList.toggle("run",run===c);el.classList.toggle("low",ms<20000);
+    el.setAttribute("aria-label",t("clock_aria",{who:c===S.player?t("you"):"Atahualpa",t:fmtClock(ms)}));});
+}
+setInterval(()=>{
+  const run=running();if(!run)return;
+  const ms=remaining(run);
+  if(run===S.player&&ms<10000&&!lowWarned){lowWarned=true;Sound.play("low");}
+  if(ms<=0){flag(run);return;}
+  paintClocks();
+},100);
+
+/* ---------- Board rendering ---------- */
+function order(){
+  const f="abcdefgh".split(""),r=[8,7,6,5,4,3,2,1];
+  return S.orient==="w"?{f,r}:{f:f.slice().reverse(),r:r.slice().reverse()};
+}
+function buildBoard(){
+  const {f,r}=order();boardEl.innerHTML="";
+  r.forEach((rank,ri)=>f.forEach((file,fi)=>{
+    const sq=file+rank;const dark=("abcdefgh".indexOf(file)+rank)%2===1;
+    const b=document.createElement("button");b.type="button";b.className="sq"+(dark?" dk":"");b.dataset.sq=sq;b.id="sq-"+sq;b.setAttribute("role","gridcell");
+    let co="";if(fi===0)co+=`<span class="co r">${rank}</span>`;if(ri===7)co+=`<span class="co f">${file}</span>`;
+    b.innerHTML=co+'<span class="slot"></span>';
+    boardEl.appendChild(b);
+  }));
+}
+function kingSquare(color){
+  const b=game.board();for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=b[r][c];if(p&&p.type==="k"&&p.color===color)return "abcdefgh"[c]+(8-r);}return null;
+}
+function render(){
+  const hist=game.history({verbose:true});const last=hist[hist.length-1];
+  const chk=game.in_check()?kingSquare(game.turn()):null;
+  for(const el of boardEl.children){
+    const sq=el.dataset.sq;const p=game.get(sq);
+    const slot=el.querySelector(".slot");
+    const html=p?pieceSVG(p.color,p.type):"";
+    if(slot.dataset.k!==(p?p.color+p.type:"")){slot.innerHTML=html;slot.dataset.k=p?p.color+p.type:"";}
+    const svg=slot.firstElementChild;
+    if(svg){svg.classList.toggle("arrive",sq===arriveSq);svg.classList.toggle("ghosted",!!(drag&&drag.ghost&&drag.from===sq));}
+    el.classList.toggle("last",!!last&&(last.from===sq||last.to===sq));
+    el.classList.toggle("sel",sq===selected);
+    el.classList.toggle("check",sq===chk);
+    const tg=targets.find(m=>m.to===sq);
+    el.classList.toggle("tgt",!!tg);el.classList.toggle("cap",!!tg&&!!(tg.captured));
+    el.setAttribute("aria-label",p?t("sq_piece",{sq,p:pieceName(p.type),c:t(p.color==="w"?"c_w":"c_b")}):sq);
+  }
+  arriveSq=null;
+  renderBars();renderMoves();renderOpening();renderStatus();renderPGN();save();
+}
+function capturedBy(color){ // pieces of the other color missing from the board
+  const start={p:8,n:2,b:2,r:2,q:1};const cnt={p:0,n:0,b:0,r:0,q:0};
+  const opp=color==="w"?"b":"w";
+  game.board().forEach(row=>row.forEach(p=>{if(p&&p.color===opp&&p.type!=="k")cnt[p.type]++;}));
+  const out=[];["q","r","b","n","p"].forEach(t=>{for(let i=0;i<Math.max(0,start[t]-cnt[t]);i++)out.push(t);});
+  return out;
+}
+function material(color){let s=0;game.board().forEach(row=>row.forEach(p=>{if(p&&p.color===color)s+={p:1,n:3,b:3,r:5,q:9,k:0}[p.type];}));return s;}
+function renderBars(){
+  const ai=S.player==="w"?"b":"w";
+  const topColor=S.orient===S.player?ai:S.player, botColor=topColor==="w"?"b":"w";
+  const label=c=>c===S.player?{n:playerName(),s:t(c==="w"?"player_sub_w":"player_sub_b")}:{n:"Atahualpa",s:t("ai_sub",{lvl:lvName(),elo:lv().elo})};
+  const T=label(topColor),B=label(botColor);
+  $("topName").textContent=T.n;$("topSub").textContent=T.s;$("botName").textContent=B.n;$("botSub").textContent=B.s;
+  const caps=c=>{const diff=material(c)-material(c==="w"?"b":"w");
+    return capturedBy(c).map(t=>pieceSVG(c==="w"?"b":"w",t,"cp")).join("")+(diff>0?`<span class="adv">+${diff}</span>`:"");};
+  $("topCaps").innerHTML=caps(topColor);$("botCaps").innerHTML=caps(botColor);
+  clockEls[topColor]=$("topClock");clockEls[botColor]=$("botClock");paintClocks();
+  const th=$("thinking");th.classList.toggle("on",thinking);
+  // place indicator next to Atahualpa's bar
+  const aiBar=topColor===ai?$("topName").parentElement:$("botName").parentElement;
+  if(th.parentElement!==aiBar)aiBar.insertBefore(th,aiBar.querySelector(".caps"));
+}
+function renderMoves(){
+  const h=game.history();const box=$("moves");
+  if(!h.length){box.innerHTML=`<div class="empty">${t(S.player==="w"?"first_move":"ai_opens")}</div>`;return;}
+  let o="<ol>";
+  for(let i=0;i<h.length;i+=2){
+    const cls=k=>(k===h.length-1?" cur":"")+(S.src&&S.src[k]==="book"?" bk":"");
+    o+=`<li><span class="no">${i/2+1}.</span><span class="mv${cls(i)}">${h[i]}</span><span class="mv${cls(i+1)}">${h[i+1]||""}</span></li>`;
+  }
+  box.innerHTML=o+"</ol>";box.scrollTop=box.scrollHeight;
+}
+/* ---------- Opening name and Atahualpa's notes ---------- */
+// curNote = {key, why, kind}: stored as a code so it can be re-translated when the language changes.
+let curNote=null;
+function renderNote(){
+  const n=$("aiNote");
+  if(!curNote){n.innerHTML="";n.dataset.k="";return;}
+  const why=curNote.why&&curNote.why.length?" ("+curNote.why.slice(0,2).map(w=>t("why_"+w)).join(", ")+")":"";
+  n.innerHTML=t(curNote.key,{why});n.dataset.k=curNote.kind||"";
+}
+function renderOpening(){
+  const el=$("openingTxt");if(!el)return;
+  const o=window.AtahualpaAI&&window.AtahualpaAI.openingOf(window.Chess,game.history());
+  el.innerHTML="";const e=document.createElement("span");e.className="eco";const n=document.createElement("span");n.className="nm";
+  if(o){e.textContent=o[0];n.textContent=window.I18N.opening(o[1]);n.title=n.textContent;}else{e.textContent="—";n.textContent=t(game.history().length?"opening_out":"opening_start");}
+  el.append(e,n);
+  renderNote();
+}
+function noteFor(c){
+  if(!c)return null;
+  if(c.source==="book")return {key:c.layer==="k"?"note_book_k":c.layer==="c"?"note_book_c":"note_book_t"};
+  if(c.source==="style")return {key:"note_style",why:(c.why||[]).filter(w=>window.I18N.has("why_"+w))};
+  if(c.source==="norepeat")return {key:"note_norepeat"};
+  return null;
+}
+function outcome(){
+  if(S.result)return {result:S.result,reason:S.reason};
+  if(game.in_checkmate())return {result:game.turn()==="w"?"0-1":"1-0",reason:"mate"};
+  if(game.in_stalemate())return {result:"1/2-1/2",reason:"stalemate"};
+  if(game.in_threefold_repetition())return {result:"1/2-1/2",reason:"threefold"};
+  if(game.insufficient_material())return {result:"1/2-1/2",reason:"insufficient"};
+  if(game.in_draw())return {result:"1/2-1/2",reason:"fifty"};
+  return null;
+}
+function renderStatus(){
+  const st=$("status"),tx=$("statusTxt");const oc=outcome();
+  if(oc){
+    st.dataset.k="end";
+    const win=(oc.result==="1-0"&&S.player==="w")||(oc.result==="0-1"&&S.player==="b");
+    const word=t(oc.result==="1/2-1/2"?"draw":win?"win":"loss"), why=t("r_"+oc.reason);
+    tx.textContent=`${word} · ${why} (${oc.result.replace("1/2","½").replace("1/2","½")})`;
+    $("endTitle").textContent=word;$("endReason").textContent=`${why} · ${oc.result}`;
+    if(!endShown){endShown=true;Sound.play(oc.result==="1/2-1/2"?"draw":win?"win":"lose");$("endOv").hidden=false;
+      const id=game.history().length+"|"+oc.reason;   // after the closing melody, Atahualpa says goodbye
+      setTimeout(()=>{const o=outcome();if(o&&game.history().length+"|"+o.reason===id)Voice.say();},1500);}
+  }else if(thinking&&Engine.status==="loading"){st.dataset.k="ai";tx.textContent=t("ai_loading");}
+  else if(thinking){st.dataset.k="ai";tx.textContent=t("ai_thinking");}
+  else if(game.turn()===S.player){st.dataset.k=game.in_check()?"check":"you";tx.textContent=t(game.in_check()?"check_your_turn":"your_turn");}
+  else{st.dataset.k="ai";tx.textContent=t("ai_turn");}
+  $("btnResign").disabled=!!oc||game.history().length===0;
+  const dr=drawState();$("btnDraw").disabled=!dr.ok;$("btnDraw").title=dr.why;
+  $("btnUndo").disabled=game.history().length===0;
+}
+
+/* ---------- PGN ---------- */
+function buildPGN(){
+  const g=new window.Chess();game.history().forEach(m=>g.move(m));
+  const oc=outcome();const fb=Engine.status==="fallback";
+  const ai=t(fb?"pgn_ai_fb":"pgn_ai",{lvl:lvName(),elo:lv().elo});
+  const me=playerName().replace(/"/g,"'");
+  const W=S.player==="w"?me:ai,B=S.player==="w"?ai:me;
+  const tags=["Event",t("pgn_event"),"Site","Atahualpa Chess","Date",S.startDate,"Round","-","White",W,"Black",B,"Result",oc?oc.result:"*"];
+  if(!fb)tags.push(S.player==="w"?"BlackElo":"WhiteElo",String(lv().elo));
+  const op=window.AtahualpaAI&&window.AtahualpaAI.openingOf(window.Chess,game.history());
+  if(op)tags.push("ECO",op[0],"Opening",op[1]);
+  tags.push("TimeControl",timed()?String(+S.tc*60):"-");
+  if(oc)tags.push("Termination",t("r_"+oc.reason));
+  if(!timed()){g.header(...tags);return g.pgn({max_width:80,newline_char:"\n"})+"\n";}
+  // Timed game: write the movetext ourselves to add the clock after each move ([%clk h:mm:ss])
+  const hist=game.history(),cur=clockNow();
+  const clk=ms=>{const t=Math.ceil(ms/1000);return `${Math.floor(t/3600)}:${String(Math.floor(t/60)%60).padStart(2,"0")}:${String(t%60).padStart(2,"0")}`;};
+  const tokens=[];
+  hist.forEach((san,k)=>{
+    const color=k%2===0?"w":"b";
+    const after=S.clockHist[k+1]?S.clockHist[k+1][color]:cur[color];
+    if(k%2===0)tokens.push(`${k/2+1}.`);
+    tokens.push(san,`{[%clk ${clk(after)}]}`);
+  });
+  tokens.push(oc?oc.result:"*");
+  let lines=[],line="";
+  tokens.forEach(t=>{if(line&&(line+" "+t).length>80){lines.push(line);line=t;}else line=line?line+" "+t:t;});
+  if(line)lines.push(line);
+  const head=[];for(let i=0;i<tags.length;i+=2)head.push(`[${tags[i]} "${String(tags[i+1]).replace(/"/g,"'")}"]`);
+  return head.join("\n")+"\n\n"+lines.join("\n")+"\n";
+}
+function renderPGN(){$("pgn").value=buildPGN();}
+function toast(msg,err){const t=$("toast");t.textContent=msg;t.classList.toggle("err",!!err);clearTimeout(toast.t);toast.t=setTimeout(()=>t.textContent="",5000);}
+function fileName(ext){const d=new Date();const p=n=>String(n).padStart(2,"0");return `atahualpa-chess-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.${ext}`;}
+// Inside the Android app the native side saves files and copies text (see MainActivity.java).
+// Native shell bridge: AtahualpaNative (iOS app) or AtahualpaAndroid (Android app); absent on the web.
+const Android=window.AtahualpaNative||window.AtahualpaAndroid||null;
+window.__pgnSaved=ok=>toast(t(ok?"t_saved":"t_cancel"));
+/* ---------- Atahualpa's farewell: "Fue un placer jugar contigo" in the chosen language ----------
+   1) Android app: the phone's own text-to-speech (natural voice, offline).
+   2) Browser: the system voice for that language (an on-device voice is preferred).
+   3) Otherwise: a short recording bundled with the game (voice-es/en/de.mp3). */
+const Voice=(()=>{
+  const PREF={es:["es-pe","es-419","es-us","es-mx","es-es","es"],en:["en-us","en-gb","en"],de:["de-de","de-at","de-ch","de"]};
+  let voices=[];
+  const load=()=>{try{voices=window.speechSynthesis?window.speechSynthesis.getVoices():[];}catch(e){voices=[];}};
+  load();try{window.speechSynthesis&&window.speechSynthesis.addEventListener("voiceschanged",load);}catch(e){}
+  function pick(lang){
+    for(const p of PREF[lang]||[]){
+      const v=voices.filter(x=>(x.lang||"").replace("_","-").toLowerCase().startsWith(p));
+      if(v.length)return v.find(x=>x.localService)||v[0];
+    }
+    return null;
+  }
+  function clip(lang){try{const a=new Audio("voice-"+lang+".mp3");a.volume=.95;const p=a.play();if(p&&p.catch)p.catch(()=>{});}catch(e){}}
+  function say(){
+    if(!Sound.on)return;
+    const lang=window.I18N.lang,text=t("farewell");
+    try{if(Android&&Android.speak&&Android.speak(text,lang))return;}catch(e){}
+    const v=window.SpeechSynthesisUtterance&&pick(lang);
+    if(v){
+      try{
+        const u=new SpeechSynthesisUtterance(text);u.voice=v;u.lang=v.lang;u.rate=.95;
+        let started=false;u.onstart=()=>{started=true;};u.onerror=()=>{if(!started){started=true;clip(lang);}};
+        window.speechSynthesis.cancel();window.speechSynthesis.speak(u);
+        setTimeout(()=>{if(!started){started=true;try{window.speechSynthesis.cancel();}catch(e){}clip(lang);}},1500);
+        return;
+      }catch(e){}
+    }
+    clip(lang);
+  }
+  return {say};
+})();
+async function savePGN(){
+  const data=buildPGN();
+  if(Android){try{Android.savePgn(fileName("pgn"),data,t("share_title"));return;}catch(e){try{Android.savePgn(fileName("pgn"),data);return;}catch(e2){}}}
+  let dl=null;try{dl=window.claude&&window.claude.use?await window.claude.use("downloads"):null;}catch(e){dl=null;}
+  if(dl){
+    try{await dl.save({filename:fileName("pgn"),data});toast(t("t_saved"));return;}
+    catch(e){
+      if(e&&e.code==="declined"){toast(t("t_cancel"));return;}
+      if(e&&e.code==="rate_limited"){toast(t("t_busy"),true);return;}
+      if(e&&(e.code==="rejected_extension"||e.code==="extension_not_enabled")){
+        try{await dl.save({filename:fileName("pgn.txt"),data});toast(t("t_txt"));return;}
+        catch(e2){if(e2&&e2.code==="declined"){toast(t("t_cancel"));return;}}
+      }
+    }
+  }
+  // Outside the claude.ai viewer: plain browser download
+  try{
+    const url=URL.createObjectURL(new Blob([data],{type:"application/x-chess-pgn"}));
+    const a=document.createElement("a");a.href=url;a.download=fileName("pgn");document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+    toast(t("t_maybe"));
+  }catch(e){toast(t("t_fail"),true);}
+}
+async function copyPGN(){
+  const ta=$("pgn");
+  if(Android){try{Android.copy(buildPGN());toast(t("t_copied"));return;}catch(e){}}
+  try{await navigator.clipboard.writeText(buildPGN());toast(t("t_copied"));}
+  catch(e){ta.focus();ta.select();toast(t("t_select"));}
+}
+
+/* ---------- Moves ---------- */
+function canInteract(){return !thinking&&!deciding&&!outcome()&&game.turn()===S.player&&!pendingPromo;}
+
+/* ---------- Draw offers ---------- */
+// The player may offer a draw on their own turn. After a refusal, a new offer waits 3 full moves.
+let deciding=false;
+const DRAW_COOLDOWN=6; // plies
+function drawState(){
+  const plies=game.history().length;
+  if(outcome())return {ok:false,why:t("dw_over")};
+  if(deciding)return {ok:false,why:t("dw_deciding")};
+  if(game.turn()!==S.player||thinking)return {ok:false,why:t("dw_turn")};
+  if(plies<2)return {ok:false,why:t("dw_first")};
+  if(S.drawDeclinedAt!=null&&plies<S.drawDeclinedAt+DRAW_COOLDOWN){
+    const left=Math.ceil((S.drawDeclinedAt+DRAW_COOLDOWN-plies)/2);
+    return {ok:false,why:left>1?t("dw_cooln",{n:left}):t("dw_cool1")};}
+  return {ok:true,why:t("dw_ok")};
+}
+function showDrawNote(key,kind){curNote=key?{key,kind:kind||"wait"}:null;renderNote();}
+// Atahualpa's eval from its own side, in centipawns (mate = ±10000).
+function aiScore(sc){
+  if(!sc)return null;
+  const v=sc.kind==="mate"?(sc.v>0?10000:-10000):sc.v;
+  return game.turn()===S.player?-v:v; // score is from the side to move
+}
+function decideDraw(evAI){
+  const plies=game.history().length, moveNo=Math.floor(plies/2)+1;
+  // Time pressure on its own clock makes Atahualpa more willing.
+  let margin=20;
+  if(timed()){const me=S.player==="w"?"b":"w";const mine=remaining(me),theirs=remaining(S.player);
+    if(mine<30000&&mine<theirs/2)margin=90;}
+  if(evAI<=-120)return {yes:true,msg:"d_yes_worse"};
+  if(moveNo<15&&evAI>-120)return {yes:false,msg:"d_no_early"};
+  if(evAI<=margin)return {yes:true,msg:evAI<-30?"d_yes_stuck":"d_yes_equal"};
+  if(evAI>=300)return {yes:false,msg:"d_no_clear"};
+  return {yes:false,msg:"d_no_slight"};
+}
+async function offerDraw(){
+  if(!drawState().ok)return;
+  deciding=true;selected=null;targets=[];
+  showDrawNote("d_wait","wait");render();
+  const token=searchToken, t0=performance.now();
+  let evAI;
+  if(Engine.status==="ready"){evAI=aiScore(await Engine.evaluate(game.fen()));}
+  if(evAI==null){const e=evalWhite(game);evAI=(S.player==="w"?-1:1)*e;} // backup engine: material count
+  const wait=700-(performance.now()-t0);if(wait>0)await new Promise(r=>setTimeout(r,wait));
+  deciding=false;
+  if(token!==searchToken||outcome()){showDrawNote("","");render();return;}
+  const d=decideDraw(evAI);
+  if(d.yes){S.result="1/2-1/2";S.reason="agreed";showDrawNote(d.msg,"yes");}
+  else{S.drawDeclinedAt=game.history().length;showDrawNote(d.msg,"no");Sound.play("check");}
+  render();
+}
+$("btnDraw").addEventListener("click",offerDraw);
+function select(sq){selected=sq;targets=sq?game.moves({square:sq,verbose:true}):[];render();}
+function tryMove(from,to){
+  const cands=game.moves({square:from,verbose:true}).filter(m=>m.to===to);
+  if(!cands.length)return false;
+  if(cands.some(m=>m.promotion)){openPromo(from,to);return true;}
+  doPlayerMove({from,to});return true;
+}
+function doPlayerMove(m){
+  beforeMove();
+  const r=game.move(m);if(!r){S.clockHist.pop();return;}
+  afterMove(r.color);S.src[game.history().length-1]="player";
+  if(!(curNote&&curNote.kind==="yes"))curNote=null;
+  Sound.forMove(r,true);
+  selected=null;targets=[];arriveSq=null;render();
+  if(!outcome())engineTurn();
+}
+function openPromo(from,to){
+  pendingPromo={from,to};
+  $("promoRow").innerHTML=["q","r","b","n"].map(pt=>`<button type="button" data-t="${pt}" aria-label="${pieceName(pt)}">${pieceSVG(S.player,pt,"pp")}</button>`).join("");
+  $("promo").hidden=false;$("promoRow").firstElementChild.focus();
+}
+$("promoRow").addEventListener("click",e=>{
+  const b=e.target.closest("button");if(!b||!pendingPromo)return;
+  const m={...pendingPromo,promotion:b.dataset.t};pendingPromo=null;$("promo").hidden=true;doPlayerMove(m);
+});
+$("promo").addEventListener("click",e=>{if(e.target.id==="promo"){pendingPromo=null;$("promo").hidden=true;select(null);}});
+
+async function engineTurn(){
+  if(outcome()||game.turn()===S.player)return;
+  const token=++searchToken;thinking=true;render();
+  const fen=game.fen();
+  const t0=performance.now(), think=thinkTime();
+  await Engine.ready();
+  if(token!==searchToken)return;
+  const hurry=timed()&&remaining(S.player==="w"?"b":"w")<5000;
+  const level=lv();
+  const adapter={
+    limited:async f=>Engine.status==="ready"?Engine.limited(f,level):(await new Promise(r=>setTimeout(r,30)),fallbackBest(f,timed()?250:700)),
+    analyse:(f,d,n,only)=>Engine.status==="ready"?Engine.analyse(f,d,n,only):Promise.resolve(null),
+  };
+  let choice=null;
+  try{choice=await window.AtahualpaAI.chooseMove({Chess:window.Chess,fen,history:game.history(),level:S.level,engine:adapter,hurry});}
+  catch(e){choice=null;}
+  if(token!==searchToken)return; // superseded by undo / new game
+  let uci=choice&&choice.uci;
+  const wait=think-(performance.now()-t0);
+  if(wait>0)await new Promise(r=>setTimeout(r,wait));
+  if(token!==searchToken)return; // undo, new game or a flag during the pause
+  if(!uci||uci==="(none)"){ // engine failure: use fallback once
+    uci=fallbackBest(fen,250);
+  }
+  thinking=false;
+  if(uci){
+    beforeMove();
+    const r=game.move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||undefined});
+    if(r){afterMove(r.color);arriveSq=r.to;Sound.forMove(r,false);
+      S.src[game.history().length-1]=choice&&choice.uci===uci?choice.source:"engine";
+      curNote=noteFor(choice&&choice.uci===uci?choice:null);}
+    else S.clockHist.pop();
+  }
+  render();
+}
+
+/* ---------- Pointer input (tap or drag) ---------- */
+function sqFromPoint(x,y){const el=document.elementFromPoint(x,y);const s=el&&el.closest(".sq");return s&&boardEl.contains(s)?s.dataset.sq:null;}
+boardEl.addEventListener("pointerdown",e=>{
+  if(e.button!==0)return;
+  const s=e.target.closest(".sq");if(!s)return;const sq=s.dataset.sq;
+  if(!canInteract())return;
+  e.preventDefault();
+  if(selected&&targets.some(m=>m.to===sq)){tryMove(selected,sq);return;}
+  const p=game.get(sq);
+  if(p&&p.color===S.player){
+    const was=selected===sq;select(sq);
+    drag={from:sq,x:e.clientX,y:e.clientY,was,ghost:null,size:s.getBoundingClientRect().width};
+    try{boardEl.setPointerCapture(e.pointerId);}catch(_){}
+  }else{select(null);}
+});
+boardEl.addEventListener("pointermove",e=>{
+  if(!drag)return;
+  if(!drag.ghost&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>5){
+    const p=game.get(drag.from);const g=document.createElement("div");g.className="drag-ghost";
+    g.style.width=g.style.height=drag.size+"px";g.innerHTML=pieceSVG(p.color,p.type,"pd");
+    g.firstElementChild.style.width="100%";g.firstElementChild.style.height="100%";
+    document.body.appendChild(g);drag.ghost=g;render();
+  }
+  if(drag.ghost){drag.ghost.style.left=e.clientX+"px";drag.ghost.style.top=e.clientY+"px";}
+});
+function endDrag(e,cancel){
+  if(!drag)return;const d=drag;drag=null;
+  if(d.ghost){d.ghost.remove();
+    const to=cancel?null:sqFromPoint(e.clientX,e.clientY);
+    if(to&&to!==d.from&&tryMove(d.from,to))return;
+    render();return;}
+  if(d.was)select(null);
+}
+boardEl.addEventListener("pointerup",e=>endDrag(e,false));
+boardEl.addEventListener("pointercancel",e=>endDrag(e,true));
+boardEl.addEventListener("keydown",e=>{ // keyboard play: Enter or Space on a square
+  if(e.key!=="Enter"&&e.key!==" ")return;
+  const s=e.target.closest(".sq");if(!s)return;e.preventDefault();if(!canInteract())return;const sq=s.dataset.sq;
+  if(selected&&targets.some(m=>m.to===sq)){tryMove(selected,sq);return;}
+  const p=game.get(sq);select(p&&p.color===S.player&&selected!==sq?sq:null);
+});
+
+/* ---------- Controls ---------- */
+function readSettings(){
+  const lvl=document.querySelector('input[name="lvl"]:checked').value;
+  const col=document.querySelector('input[name="col"]:checked').value;
+  const tc=document.querySelector('input[name="tc"]:checked').value;
+  return {lvl,col,tc};
+}
+function newGame(){
+  searchToken++;Engine.stop();thinking=false;
+  const {lvl,col,tc}=readSettings();
+  S.tc=tc;resetClocks();
+  S.level=lvl;S.player=col==="r"?(Math.random()<.5?"w":"b"):col;S.orient=S.player;
+  S.result=null;S.reason="";S.startDate=today();S.drawDeclinedAt=null;S.src=[];deciding=false;curNote=null;
+  Engine.send("ucinewgame");
+  game=new window.Chess();selected=null;targets=[];pendingPromo=null;endShown=false;
+  $("promo").hidden=true;$("endOv").hidden=true;
+  buildBoard();render();Sound.play("start");engineTurn();
+}
+function settingsChanged(){
+  if(game.history().length===0&&!thinking)newGame();
+  else{settingsNoteKey="settings_saved";$("settingsNote").textContent=t(settingsNoteKey);}
+}
+document.querySelectorAll('input[name="lvl"],input[name="col"],input[name="tc"]').forEach(i=>i.addEventListener("change",settingsChanged));
+let settingsNoteKey="settings_note";
+$("pname").addEventListener("input",e=>{S.name=e.target.value.trim();renderBars();renderPGN();save();});
+$("btnNew").addEventListener("click",()=>{settingsNoteKey="settings_note";$("settingsNote").textContent=t(settingsNoteKey);newGame();});
+$("endNew").addEventListener("click",()=>newGame());
+$("endClose").addEventListener("click",()=>{$("endOv").hidden=true;});
+$("endSave").addEventListener("click",savePGN);
+$("btnFlip").addEventListener("click",()=>{S.orient=S.orient==="w"?"b":"w";buildBoard();render();});
+$("btnResign").addEventListener("click",()=>{
+  const b=$("btnResign");
+  if(b.dataset.confirm!=="1"){b.dataset.confirm="1";b.lastChild.textContent=t("confirm");setTimeout(()=>{b.dataset.confirm="";b.lastChild.textContent=t("resign");},3000);return;}
+  b.dataset.confirm="";b.lastChild.textContent=t("resign");
+  searchToken++;Engine.stop();thinking=false;
+  if(running())S.clock=clockNow();
+  S.result=S.player==="w"?"0-1":"1-0";S.reason="resign";selected=null;targets=[];render();
+});
+$("btnUndo").addEventListener("click",()=>{
+  searchToken++;Engine.stop();thinking=false;
+  if(S.result){S.result=null;S.reason="";}
+  deciding=false;curNote=null;
+  while(game.history().length){const m=game.undo();if(m.color===S.player)break;}
+  undoClocks();S.src=(S.src||[]).slice(0,game.history().length);
+  endShown=false;$("endOv").hidden=true;selected=null;targets=[];arriveSq=null;
+  render();
+  if(game.turn()!==S.player)engineTurn();
+});
+$("btnSave").addEventListener("click",savePGN);
+$("btnCopy").addEventListener("click",copyPGN);
+
+/* ---------- Persistence ---------- */
+function serialize(){return {v:1,moves:game.history(),S:{...S,clock:clockNow()}};}
+document.addEventListener("visibilitychange",()=>{if(document.hidden)save();});
+window.addEventListener("pagehide",save);
+function save(){try{localStorage.setItem("atahualpa-chess-v1",JSON.stringify(serialize()));}catch(e){}}
+function restore(data){
+  if(!data||!data.S||!Array.isArray(data.moves))return false;
+  const g=new window.Chess();for(const m of data.moves){if(!g.move(m))return false;}
+  game=g;Object.assign(S,data.S);if(!LEVELS[S.level])S.level="intermedio";
+  if(!["0","3","5"].includes(S.tc)){S.tc="0";}
+  if(!Array.isArray(S.src))S.src=[];
+  const OLD={"Jaque mate":"mate","Rey ahogado":"stalemate","Triple repetición":"threefold","Material insuficiente":"insufficient","Regla de los 50 movimientos":"fifty",
+    "Abandono":"resign","Tiempo agotado":"flag","Tiempo agotado sin material para dar mate":"flag_nomat","Tablas por acuerdo":"agreed"};
+  if(S.reason&&OLD[S.reason])S.reason=OLD[S.reason];
+  if(window.I18N.defaults.includes(S.name))S.name="";
+  if(!S.clock||!Array.isArray(S.clockHist)){S.clockHist=[];S.clock={w:0,b:0};S.clockOn=false;}
+  turnStart=performance.now();
+  return true;
+}
+/* ---------- Language ---------- */
+function applyLang(l){
+  window.I18N.set(l);try{localStorage.setItem("atahualpa-lang",window.I18N.lang);}catch(e){}
+  document.documentElement.lang=window.I18N.lang;
+  document.querySelectorAll("[data-i18n]").forEach(el=>{el.textContent=t(el.dataset.i18n);});
+  document.querySelectorAll("[data-i18n-aria]").forEach(el=>el.setAttribute("aria-label",t(el.dataset.i18nAria)));
+  document.querySelectorAll("[data-i18n-title]").forEach(el=>el.title=t(el.dataset.i18nTitle));
+  document.querySelectorAll(".lang button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.lang===window.I18N.lang)));
+  $("btnResign").lastChild.textContent=t($("btnResign").dataset.confirm==="1"?"confirm":"resign");
+  $("soundTxt").textContent=t(Sound.on?"sound_on":"sound_off");
+  $("settingsNote").textContent=t(settingsNoteKey);
+  $("pname").placeholder=t("player");
+  if(pendingPromo)$("promoRow").querySelectorAll("button").forEach(b=>b.setAttribute("aria-label",pieceName(b.dataset.t)));
+  try{Android&&Android.setLanguage&&Android.setLanguage(window.I18N.lang);}catch(e){}
+  setChip();render();
+}
+document.querySelectorAll(".lang button").forEach(b=>b.addEventListener("click",()=>applyLang(b.dataset.lang)));
+function start(hot){
+  let data=hot&&hot.moves?hot:null;
+  if(!data){try{data=JSON.parse(localStorage.getItem("atahualpa-chess-v1")||"null");}catch(e){data=null;}}
+  restore(data);
+  document.querySelector(`input[name="lvl"][value="${S.level}"]`).checked=true;
+  document.querySelector(`input[name="col"][value="${S.player}"]`).checked=true;
+  document.querySelector(`input[name="tc"][value="${S.tc}"]`).checked=true;
+  $("pname").value=S.name||"";
+  endShown=!!outcome();
+  let lang="es";try{lang=localStorage.getItem("atahualpa-lang")||"es";}catch(e){}
+  buildBoard();applyLang(lang);
+  setChip();Engine.init();
+  fetch("book.json").then(r=>r.ok?r.json():null).then(b=>{if(b){window.AtahualpaAI.setBook(b);renderOpening();}}).catch(()=>{});
+  engineTurn();
+}
+try{window.claude&&window.claude.hot&&window.claude.hot.snapshot&&window.claude.hot.snapshot(()=>serialize());}catch(e){}
+if(window.claude&&window.claude.hot&&window.claude.hot.ready)window.claude.hot.ready(start);
+else start((window.claude&&window.claude.hot&&window.claude.hot.data)||{});
+})();
+</script>
