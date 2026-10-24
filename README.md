@@ -11,6 +11,7 @@ Para preguntas o problemas, abre un *issue* en este repositorio.
 For questions or problems, open an issue in this repository.
 
 - Política de privacidad / Privacy policy: [PRIVACY.md](PRIVACY.md)
+- Código fuente / Source code: https://github.com/androidking-ja/atahualpa-chess
 
 ## Estructura / Layout
 | Carpeta | Contenido |
